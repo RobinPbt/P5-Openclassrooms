@@ -190,3 +190,11 @@ def display_scree_plot(pca):
     plt.ylabel("pourcentage d'inertie")
     plt.title("Eboulis des valeurs propres")
     plt.show(block=False)
+    
+    
+# ---------------------------------Modeling functions-------------------------------------------------
+
+def compute_time_diff(df, var:str):
+    """Function which transforms a time variable in a dataframe in a number of days differential with a reference date (2016-01-01 00:00:01)"""
+    
+    df[var] = df[var].apply(lambda p: (p - pd._libs.tslibs.timestamps.Timestamp('2016-01-01 00:00:01')).days)
