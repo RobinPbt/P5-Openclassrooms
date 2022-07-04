@@ -7,6 +7,8 @@ import timeit
 
 from sklearn import metrics
 from sklearn import model_selection
+from sklearn import decomposition
+from sklearn.cluster import KMeans
 
 from matplotlib.collections import LineCollection
 
@@ -198,3 +200,165 @@ def compute_time_diff(df, var:str):
     """Function which transforms a time variable in a dataframe in a number of days differential with a reference date (2016-01-01 00:00:01)"""
     
     df[var] = df[var].apply(lambda p: (p - pd._libs.tslibs.timestamps.Timestamp('2016-01-01 00:00:01')).days)
+
+    
+def test_KMeans(k_clusters:range, X):
+    """Function which tests values in k_clusters for a KMeans (KMeans++ with one iteration) and displays inertia, 
+    davies bouldin and silhouettes scores. X must be processed"""
+    
+    inertia_scores = []
+    silhouette_scores = []
+    davies_bouldin_scores = []
+    
+    for k in k_clusters:
+    
+        model = KMeans(n_clusters=k, random_state=0)
+        model.fit(X)
+
+        inertia_scores.append(-model.score(X))
+        silhouette_scores.append(metrics.silhouette_score(X, model.labels_))
+        davies_bouldin_scores.append(metrics.davies_bouldin_score(X, model.labels_))
+        
+    
+    plt.figure(figsize=(19,5))
+    
+    plt.subplot(1,3,1)
+    plt.plot(k_clusters, inertia_scores)
+    plt.xlabel('number of clusters')
+    plt.title('inertia score')
+    
+    plt.subplot(1,3,2)
+    plt.plot(k_clusters, silhouette_scores)
+    plt.xlabel('number of clusters')
+    plt.title('silhouette score')
+    
+    plt.subplot(1,3,3)
+    plt.plot(k_clusters, davies_bouldin_scores)
+    plt.xlabel('number of clusters')
+    plt.title('davies bouldin score')
+    
+    return pd.DataFrame({'K' : [i for i in k_clusters], 'inertia_scores' : inertia_scores, 
+                         'silhouette_scores' : silhouette_scores, 'davies_bouldin_scores' : davies_bouldin_scores})
+
+
+def display_clustering_2D(model, X):
+    """Function which performs a PCA to display the result of a clustering in 2D. Model must be fitted and X preprocessed"""
+
+    # Perform PCA with 2 components and displays variance explained by the first axis and the sum of the 2 first axis
+    pca = decomposition.PCA(n_components=2)
+    pca.fit(X)
+    print("Total explained variance by 2 components : {:.2%}".format(pca.explained_variance_ratio_.cumsum()[1]))
+    X_trans = pca.transform(X)
+
+    # Plot the dataset in the 2 first components of the pca
+    fig = plt.figure(figsize=(8,6))
+    plt.scatter(X_trans[:,0], X_trans[:,1], c=model.labels_)
+    plt.xlabel("First inertia axis ({:.2%} of variance)".format(pca.explained_variance_ratio_[0]))
+    plt.ylabel("Second inertia axis ({:.2%} of variance)".format(pca.explained_variance_ratio_[1]))
+    plt.show()
+
+    
+def display_clusters_characteristics(model, X):
+    """Function which returns a dataframe with main informations for each cluster after a clustering. 
+    Arguments : model must be fitted and X is the initial matrix not processed"""
+    
+    nb_clusters = max(model.labels_) + 1
+
+    df_clusters = pd.DataFrame(index=['Cluster {}'.format(i+1) for i in range(0, nb_clusters)])
+
+
+    # Computing nb_customers and percentage of total customers per cluster
+    nb_customers = []
+    prop_customers = []
+
+    for i in range(0, nb_clusters):
+        nb_customers.append(sum(model.labels_ == i))
+        prop_customers.append(sum(model.labels_ == i) / len(model.labels_))
+
+    df_clusters['nb_customers'] = nb_customers
+    df_clusters['prop_customers'] = prop_customers
+    
+    # Compute variables characteristics, with a distinction between categorical and numeric variables
+    variables = X.columns
+    
+    for var in variables:
+        
+        # If the variable is an object (categorical variable) compute the mode and count the percentage represented by it
+        if X[var].dtypes == 'object':
+            df_clusters['mode_{}'.format(var)] = [0 for i in range(0, nb_clusters)]
+            df_clusters['mode_%_{}'.format(var)] = [0 for i in range(0, nb_clusters)]
+    
+            for i in range(0, nb_clusters):
+                temp_df = X[model.labels_ == i]
+                df_clusters.loc['Cluster {}'.format(i+1), 'mode_{}'.format(var)] = temp_df[var].mode()[0]
+                df_clusters.loc['Cluster {}'.format(i+1), 'mode_%_{}'.format(var)] = len(temp_df[temp_df[var] == temp_df[var].mode()[0]]) / len(temp_df)  
+         
+        # Else, the variable is numeric and we compute mean, max and min for each cluster
+        else:
+            df_clusters['mean_{}'.format(var)] = [0 for i in range(0, nb_clusters)]
+            df_clusters['max_{}'.format(var)] = [0 for i in range(0, nb_clusters)]
+            df_clusters['min_{}'.format(var)] = [0 for i in range(0, nb_clusters)]
+
+            for i in range(0, nb_clusters):
+                df_clusters.loc['Cluster {}'.format(i+1), 'mean_{}'.format(var)] = X[model.labels_ == i][var].mean()
+                df_clusters.loc['Cluster {}'.format(i+1), 'max_{}'.format(var)] = X[model.labels_ == i][var].max()
+                df_clusters.loc['Cluster {}'.format(i+1), 'min_{}'.format(var)] = X[model.labels_ == i][var].min()
+    
+    return df_clusters
+
+
+def plot_variables_distributions_clusters(model, X, figsize=(20,20)):
+    """Visualisation of distribution of variables for each cluster.
+    Arguments : model must be fitted and X is the initial matrix not processed"""
+    
+    nb_clusters = max(model.labels_) + 1
+    variables = X.columns
+    nb_var = X.shape[1]
+
+    plt.figure(figsize=figsize)
+
+    for i in range(0,nb_clusters):
+
+        for j, var in enumerate(variables):
+            plt.subplot(nb_clusters, nb_var, (nb_var*i) + (j+1))
+            plt.hist(X[model.labels_ == i][var], bins=50)
+            plt.title('Cluster {} : {}'.format(i+1, var))
+
+            
+def plot_variables_aggregated_distributions_clusters(model, X, figsize=(18,6)):
+    """Visualisation of distribution of variables for each cluster.
+    Arguments : model must be fitted and X is the initial matrix not processed"""
+    
+    nb_clusters = max(model.labels_) + 1
+    variables = X.columns
+    nb_var = X.shape[1]
+
+    plt.figure(figsize=figsize)
+    
+    for i, var in enumerate(variables):
+        plt.subplot(1,nb_var,i+1)
+        
+        for j in range(0, nb_clusters):
+            plt.hist(X[model.labels_ == j][var], bins=50, label='Cluster {}'.format(j+1))
+
+        plt.legend()
+        plt.title(var)
+
+
+def relation_variable_clusters(model, X, figsize=(20,7)):
+    """Visualisation of relation between clusters and variables with boxplots.
+    Arguments : model must be fitted and X is the initial matrix not processed"""
+    
+    nb_clusters = max(model.labels_) + 1
+    variables = X.columns
+    nb_var = X.shape[1]
+    
+    plt.figure(figsize=figsize)
+
+    for i, var in enumerate(variables):
+        plt.subplot(1, nb_var, i+1)
+        sns.boxplot(x=model.labels_, y=var, data=X)
+        plt.title(var)
+        plt.xlabel('Clusters')
+        plt.ylabel(None)
+        plt.xticks(ticks=[i for i in range(0, nb_clusters)], labels=[i+1 for i in range(0, nb_clusters)])
