@@ -9,6 +9,7 @@ from sklearn import metrics
 from sklearn import model_selection
 from sklearn import decomposition
 from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
 
 from matplotlib.collections import LineCollection
 
@@ -362,3 +363,42 @@ def relation_variable_clusters(model, X, figsize=(20,7)):
         plt.xlabel('Clusters')
         plt.ylabel(None)
         plt.xticks(ticks=[i for i in range(0, nb_clusters)], labels=[i+1 for i in range(0, nb_clusters)])
+
+
+def test_DBSCAN(X, eps_range=np.linspace(0.5,2,4), min_samples=50):
+    """Function which test a DBSCAN model with the given parameters eps and min_sample (all other parameters being the ones by default) and gives for each test the silhouette score, the davies bouldin score and the number of clusters. It then plots the results. X must be processed"""
+
+    silhouette_scores = []
+    davies_bouldin_scores = []
+    nb_clusters = []
+
+    # Computing the scores for each configuration of eps_range and min_sample
+    for eps_param in eps_range:
+        model = DBSCAN(eps=eps_param, min_samples=min_samples, metric='euclidean') 
+        model.fit(X)
+
+        silhouette_scores.append(metrics.silhouette_score(X, model.labels_))
+        davies_bouldin_scores.append(metrics.davies_bouldin_score(X, model.labels_))
+        nb_clusters.append(max(model.labels_) + 1)
+
+    
+    # Plotting the results
+    plt.figure(figsize=(19,5))
+
+    plt.subplot(1,3,1)
+    plt.plot(eps_range, nb_clusters)
+    plt.xlabel('eps')
+    plt.title('number of clusters')
+
+    plt.subplot(1,3,2)
+    plt.plot(eps_range, silhouette_scores)
+    plt.xlabel('eps')
+    plt.title('silhouette score')
+
+    plt.subplot(1,3,3)
+    plt.plot(eps_range, davies_bouldin_scores)
+    plt.xlabel('eps')
+    plt.title('davies bouldin score')
+    
+    return pd.DataFrame({'eps' : [i for i in eps_range], 'nb_clusters' : nb_clusters, 
+                     'silhouette_scores' : silhouette_scores, 'davies_bouldin_scores' : davies_bouldin_scores})
