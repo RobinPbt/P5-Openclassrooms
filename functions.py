@@ -10,45 +10,18 @@ from sklearn import model_selection
 from sklearn import decomposition
 from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
+from sklearn.metrics import adjusted_rand_score
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 
 from matplotlib.collections import LineCollection
 
 from scipy.cluster.hierarchy import dendrogram
 
+from datetime import datetime, timezone
+
 # ---------------------------------Cleaning functions--------------------------------------------------
-
-def var_del(df, liste_var_del: list):
-    """Function which delete in df the variables included in liste_var_del"""
-    
-    for var in liste_var_del:
-        del df[var]
-
-
-def remove_outlier_IQR(df, variable: str):
-    """Function which applies a IQR to detect outliers of a given variable and deletes these outliers in the df"""
-    
-    Q1 = df[variable].quantile(0.25)
-    Q3 = df[variable].quantile(0.75)
-    IQR = Q3-Q1
-    df_final = df[~((df[variable]<(Q1-1.5*IQR)) | (df[variable]>(Q3+1.5*IQR)))]
-    return df_final
-
-
-def drop_zeros(df, variable: str):
-    """Function which drop rows with values equals 0 for a given variable on a given df"""
-    
-    idx_list = list(df[df[variable] == 0].index)
-
-    df.drop(index=idx_list, inplace=True)
-
-
-def val_correction(df, variable : str, correction_dict : dict):
-    """Function which takes a dictionary with keys as values to replace and values for replacment and operates the replacment 
-    on a given variable for a given df"""
-
-    for inc_val, cor_val in correction_dict.items():
-        df.loc[df[variable] == inc_val, variable] = cor_val
-
 
 def select_one_mode_value(df, variable:str):
     """ After an aggregation of mode values in a dataframe for a given variable, this function selects only one mode value if several are returned during aggregation. Return a list"""
@@ -67,134 +40,6 @@ def select_one_mode_value(df, variable:str):
                 val_list.append(val[0])
 
     return val_list
-
-# ---------------------------------Analysis functions--------------------------------------------------
-
-def eta_squared(x,y):
-    """Function which computes eta squared between x and y"""
-    
-    moyenne_y = y.mean()
-    classes = []
-    for classe in x.unique():
-        yi_classe = y[x==classe]
-        classes.append({'ni': len(yi_classe),
-                        'moyenne_classe': yi_classe.mean()})
-    SCT = sum([(yj-moyenne_y)**2 for yj in y])
-    SCE = sum([c['ni']*(c['moyenne_classe']-moyenne_y)**2 for c in classes])
-    return SCE/SCT
-
-
-def anova_plot(df, qualitative_var, quantitative_var, figsize=(8,6)):
-    """Function which creates a boxplot between a qualitative_var and a quantitative_var in a df and displays eta squared"""
-    
-    figure = plt.figure(figsize=figsize)
-    ax = plt.axes()
-
-    modalites = df[qualitative_var].sort_values(ascending=False).unique()
-    groupes = []
-
-    for m in modalites:
-        groupes.append(df[df[qualitative_var]==m][quantitative_var])
-
-    medianprops = {'color':"black"}
-    meanprops = {'marker':'o', 'markeredgecolor':'black',
-                'markerfacecolor':'firebrick'}
-
-    h = plt.boxplot(groupes, labels=modalites, showfliers=False, medianprops=medianprops, 
-                vert=False, patch_artist=True, showmeans=True, meanprops=meanprops)
-
-    ax = ax.set(xlabel=quantitative_var, 
-                ylabel=qualitative_var, 
-                title='eta squared = {:.3f}'.format(eta_squared(df[qualitative_var],df[quantitative_var])))
-
-    
-# ---------------------------------PCA functions-------------------------------------------------
-
-def display_circles(pcs, n_comp, pca, axis_ranks, labels=None, label_rotation=0, lims=None):
-    """Function which displays correlation circles of a pca"""
-    
-    for d1, d2 in axis_ranks:
-        if d2 < n_comp:
-
-            # Initialization
-            fig, ax = plt.subplots(figsize=(7,6))
-
-            # Determining chart limits
-            if lims is not None :
-                xmin, xmax, ymin, ymax = lims
-            elif pcs.shape[1] < 30 :
-                xmin, xmax, ymin, ymax = -1, 1, -1, 1
-            else :
-                xmin, xmax, ymin, ymax = min(pcs[d1,:]), max(pcs[d1,:]), min(pcs[d2,:]), max(pcs[d2,:])
-
-            # displays arrows
-            # if there are more than 30 arrows, we don't display the triangle
-            if pcs.shape[1] < 30 :
-                plt.quiver(np.zeros(pcs.shape[1]), np.zeros(pcs.shape[1]),
-                   pcs[d1,:], pcs[d2,:], 
-                   angles='xy', scale_units='xy', scale=1, color="grey")
-                # (see : https://matplotlib.org/api/_as_gen/matplotlib.pyplot.quiver.html)
-            else:
-                lines = [[[0,0],[x,y]] for x,y in pcs[[d1,d2]].T]
-                ax.add_collection(LineCollection(lines, axes=ax, alpha=.1, color='black'))
-            
-            # displays variables names  
-            if labels is not None:  
-                for i,(x, y) in enumerate(pcs[[d1,d2]].T):
-                    if x >= xmin and x <= xmax and y >= ymin and y <= ymax :
-                        plt.text(x, y, labels[i], fontsize='14', ha='center', va='center', rotation=label_rotation, color="blue", alpha=0.5)
-            
-            # displays circle
-            circle = plt.Circle((0,0), 1, facecolor='none', edgecolor='b')
-            plt.gca().add_artist(circle)
-
-            # defines charts limits
-            plt.xlim(xmin, xmax)
-            plt.ylim(ymin, ymax)
-        
-            # displays horizontal and vertical lines
-            plt.plot([-1, 1], [0, 0], color='grey', ls='--')
-            plt.plot([0, 0], [-1, 1], color='grey', ls='--')
-
-            # axis names with explained variance ratio
-            plt.xlabel('F{} ({}%)'.format(d1+1, round(100*pca.explained_variance_ratio_[d1],1)))
-            plt.ylabel('F{} ({}%)'.format(d2+1, round(100*pca.explained_variance_ratio_[d2],1)))
-
-            plt.title("Cercle des corrélations (F{} et F{})".format(d1+1, d2+1))
-            plt.show(block=False)
-
-def display_components(pca, nb_comp, features):
-    """Displays the decomposition of a pca component computation"""
-
-    pca_results_df = pd.DataFrame()
-    
-    for i, component in enumerate(pca.components_):
-        pca_results_df['F{}'.format(i+1)] = component
-    
-    pca_results_df.index = features
-    
-    print("Component F{} :".format(nb_comp))
-    print("Explained variance : {} %".format(round(100*pca.explained_variance_ratio_[nb_comp-1],1)))
-    print('{}'.format('-'*80))
-    print('')
-    print('Top 10 positively correlated features to component :')
-    print('')
-    print(pca_results_df.sort_values(by='F{}'.format(nb_comp), ascending=False).iloc[:10]['F{}'.format(nb_comp)])
-    print('{}'.format('-'*80))
-    print('')
-    print('Top 10 negatively correlated features to component :')
-    print('')
-    print(pca_results_df.sort_values(by='F{}'.format(nb_comp), ascending=True).iloc[:10]['F{}'.format(nb_comp)])
-
-    
-def display_scree_plot(pca):
-    scree = pca.explained_variance_ratio_*100
-    plt.bar(np.arange(len(scree))+1, scree)
-    plt.plot(np.arange(len(scree))+1, scree.cumsum(),c="red",marker='o')
-    plt.xlabel("rang de l'axe d'inertie")
-    plt.ylabel("pourcentage d'inertie")
-    plt.title("Eboulis des valeurs propres")
-    plt.show(block=False)
     
     
 # ---------------------------------Modeling functions-------------------------------------------------
@@ -427,3 +272,127 @@ def plot_dendrogram(model, **kwargs):
 
     # Plot the corresponding dendrogram
     dendrogram(linkage_matrix, **kwargs)
+    
+    
+# ---------------------------------Maintenance functions-------------------------------------------------
+
+def filter_dataset(reference_date, full_data):
+    """Function which filters the dataset by taking all orders before a reference date 
+    and giving synthetic variables that can be used in the machine learning algorithm. 
+    Specific function built for this project only"""
+    
+    # Selecting orders before a reference date
+    selected_data = full_data[full_data['order_purchase_timestamp'] < reference_date]
+     
+    # Create df to store our variables
+    data = pd.DataFrame()
+    data['customer_unique_id'] = selected_data['customer_unique_id'].unique()
+    
+    # Adding number of orders per customer
+    temp_df = pd.DataFrame()
+    temp_df['customer_unique_id'] = selected_data['customer_unique_id'].value_counts().index
+    temp_df['nb_orders'] = selected_data['customer_unique_id'].value_counts().values
+    data = pd.merge(data, temp_df, how='left', on='customer_unique_id')
+
+    # Adding and transforming last order date by customer
+    temp_df = pd.DataFrame()
+    temp_df['last_order_time'] = selected_data.groupby(by='customer_unique_id')['order_purchase_timestamp'].max()
+    temp_df['last_order_time'] = pd.to_datetime(temp_df['last_order_time'], infer_datetime_format=True, errors='raise')
+    temp_df['last_order_time'] = temp_df['last_order_time'].apply(datetime.timestamp)
+    data = pd.merge(data, temp_df, how='left', on='customer_unique_id')
+
+    # Adding variable mean_review_score
+    temp_df = pd.DataFrame()
+    temp_df['mean_review_score'] = selected_data.groupby(by='customer_unique_id')['review_score'].mean()
+    data = pd.merge(data, temp_df, how='left', on='customer_unique_id')
+    
+    # Adding variable total_payment_value
+    temp_df = pd.DataFrame()
+    temp_df['total_payment_value'] = selected_data.groupby(by='customer_unique_id')['total_payment_value'].sum()
+    data = pd.merge(data, temp_df, how='left', on='customer_unique_id')
+    
+    # Withdrawing customer_unique_id
+    data.drop(columns='customer_unique_id', inplace=True)
+    
+    return data
+
+
+def fitting_reference_model(reference_date, full_data):
+    """Fitting the reference_model with at reference_date"""
+
+    # Creating a dataset with all orders from begining to reference date
+    X = filter_dataset(reference_date, full_data)
+
+    # Creating reference preprocessor and fitting
+    reference_preprocessor = Pipeline(steps=[('imputer', SimpleImputer(strategy='mean')),
+        ('stdscaler', StandardScaler())])
+
+    processed_X = reference_preprocessor.fit_transform(X)
+
+    # Creating and fitting reference model
+    reference_model = KMeans(n_clusters=5, random_state=0)
+    reference_model.fit(processed_X)
+    
+    return reference_preprocessor, reference_model
+
+
+def compute_ARI_scores(reference_date, full_data, delta_days=7, nb_delta_days=16):
+    """Computing ARI at different dates intervals to see the evolution"""
+
+    # Fitting reference_preprocessor and reference_model at reference_date
+    reference_preprocessor, reference_model = fitting_reference_model(reference_date, full_data)
+    
+    time_delta = pd._libs.tslibs.timedeltas.Timedelta(delta_days, unit='D')
+
+    ARI_scores = []
+    dates = []
+
+    for i in range(nb_delta_days): # Compute over delta_days * nb_delta_days
+
+        # Computing new date adding the time_delta
+        date = reference_date + ((i+1) * time_delta)
+        dates.append(date)
+
+        # Creating the X matrix with orders until this new dates (thus adding all orders during time_delta)
+        X_new = filter_dataset(date, full_data)
+
+        # New preprocessor
+        preprocessor_new = Pipeline(steps=[('imputer', SimpleImputer(strategy='mean')),
+        ('stdscaler', StandardScaler())])
+
+        # Creating to preprocessed matrix, one with the reference_preprocessor (used in reference_model), and one with a new one
+        processed_X_new = preprocessor_new.fit_transform(X_new)
+        processed_X_reference = reference_preprocessor.transform(X_new)
+
+        # Creating and fitting new model
+        new_model = KMeans(n_clusters=5, random_state=0)
+        new_model.fit(processed_X_new)
+
+        # Compute ARI score to see similarity with prediction of old model vs. a new model fitted on new datas
+        ARI_scores.append(adjusted_rand_score(reference_model.predict(processed_X_reference), new_model.labels_))
+        
+    return dates, ARI_scores
+
+
+def compute_maintenance_time(reference_date, full_data, delta_days=7, nb_delta_days=16, ARI_treshold=0.8):
+    """Function which computes and plots ARI scores of the dataset at different dates to see evolution. 
+    Tells when we reach ARI_treshold which mean inital model is obsolete.
+    Specific function built for this project only"""
+    
+    dates, ARI_scores = compute_ARI_scores(reference_date, full_data, delta_days=delta_days, nb_delta_days=nb_delta_days)
+    
+    # Compute obsolescence time
+    for ARI, date in zip(ARI_scores, dates):
+        if ARI < ARI_treshold:
+            print("Reference date : {}-{}-{}".format(reference_date.year, reference_date.month, reference_date.day))
+            print("Date from which reference model isn't working well enough : {}-{}-{}".format(date.year, date.month, date.day))
+            print("In days from reference date : {}".format(-(reference_date - date).days))
+            print("In weeks from reference date : {:.0f}".format(int((-(reference_date - date).days)) / 7))
+            break
+    
+    # Plotting results
+    plt.figure(figsize=(12,8))
+    plt.plot(dates, ARI_scores)
+    plt.xlabel('dates')
+    plt.ylabel('ARI score')
+    plt.show()
