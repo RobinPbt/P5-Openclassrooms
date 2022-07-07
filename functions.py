@@ -13,6 +13,8 @@ from sklearn.cluster import DBSCAN
 
 from matplotlib.collections import LineCollection
 
+from scipy.cluster.hierarchy import dendrogram
+
 # ---------------------------------Cleaning functions--------------------------------------------------
 
 def var_del(df, liste_var_del: list):
@@ -402,3 +404,26 @@ def test_DBSCAN(X, eps_range=np.linspace(0.5,2,4), min_samples=50):
     
     return pd.DataFrame({'eps' : [i for i in eps_range], 'nb_clusters' : nb_clusters, 
                      'silhouette_scores' : silhouette_scores, 'davies_bouldin_scores' : davies_bouldin_scores})
+
+
+def plot_dendrogram(model, **kwargs):
+    """Create linkage matrix and then plot the dendrogram"""
+
+    # create the counts of samples under each node
+    counts = np.zeros(model.children_.shape[0])
+    n_samples = len(model.labels_)
+    for i, merge in enumerate(model.children_):
+        current_count = 0
+        for child_idx in merge:
+            if child_idx < n_samples:
+                current_count += 1  # leaf node
+            else:
+                current_count += counts[child_idx - n_samples]
+        counts[i] = current_count
+
+    linkage_matrix = np.column_stack(
+        [model.children_, model.distances_, counts]
+    ).astype(float)
+
+    # Plot the corresponding dendrogram
+    dendrogram(linkage_matrix, **kwargs)
