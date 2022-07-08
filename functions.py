@@ -14,6 +14,7 @@ from sklearn.metrics import adjusted_rand_score
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
+from sklearn.manifold import TSNE
 
 from matplotlib.collections import LineCollection
 
@@ -106,6 +107,21 @@ def display_clustering_2D(model, X):
     plt.show()
 
     
+def display_clustering_2D_TSNE(model, X, perplexity=40):
+    """Function which performs a TSNE to display the result of a clustering in 2D. Model must be fitted and X preprocessed"""
+
+    # Perform TSNE with 2 components
+    tsne = TSNE(n_components=2, perplexity=perplexity, n_iter=3000, init='pca')
+    X_trans = tsne.fit_transform(X)
+
+    # Plot the dataset in the 2 first components of the pca
+    fig = plt.figure(figsize=(8,6))
+    plt.scatter(X_trans[:,0], X_trans[:,1], c=model.labels_)
+    plt.xlabel("First component")
+    plt.ylabel("Second component")
+    plt.show()
+
+
 def display_clusters_characteristics(model, X):
     """Function which returns a dataframe with main informations for each cluster after a clustering. 
     Arguments : model must be fitted and X is the initial matrix not processed"""
