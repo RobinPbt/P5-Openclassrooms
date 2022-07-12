@@ -90,6 +90,14 @@ def test_KMeans(k_clusters:range, X):
                          'silhouette_scores' : silhouette_scores, 'davies_bouldin_scores' : davies_bouldin_scores})
 
 
+def plot_silhouette(model, X):
+    """Function which plot the silhouette score of each cluster of a model. X must be preprocessed"""
+    
+    visualizer = SilhouetteVisualizer(model, colors='yellowbrick')
+    visualizer.fit(X)
+    visualizer.show()
+
+
 def display_clustering_2D(model, X):
     """Function which performs a PCA to display the result of a clustering in 2D. Model must be fitted and X preprocessed"""
 
@@ -412,3 +420,24 @@ def compute_maintenance_time(reference_date, full_data, delta_days=7, nb_delta_d
     plt.xlabel('dates')
     plt.ylabel('ARI score')
     plt.show()
+
+
+def compute_times(model, X):
+    """Function which computes training and predict time of a model"""
+    
+    # Train time
+    start_time = timeit.default_timer()
+    model.fit(X)
+    fit_time = timeit.default_timer() - start_time
+
+    # Predict time
+    start_time = timeit.default_timer()
+    prediction = model.predict(X)
+    predict_time = timeit.default_timer() - start_time
+    
+    times = [fit_time, predict_time]
+    
+    print("Fit time : {:.2f}s".format(fit_time))
+    print("Predict time : {:.2f}s".format(predict_time))
+    
+    return times
