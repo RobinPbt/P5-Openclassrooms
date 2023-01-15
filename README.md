@@ -1,6 +1,7 @@
 # P5-Openclassrooms
 
 This repository has been created in the context of the 5th project of my Data Scientist training with Openclassrooms. 
+
 The objective was to realize a clustering based on a Kaggle dataset (https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) containing customers information of a Brazilian marketplace.
 
 After preprocessing steps, the project has been conducted in the following order:
